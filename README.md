@@ -48,8 +48,9 @@ def session_client():
 def client(emulator: Emulator, session_client: datastore.Client):
     emulator.reset()
     yield session_client
+```
 
-
+```python
 # datastore_test.py
 from google.cloud import datastore
 
