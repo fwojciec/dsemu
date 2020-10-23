@@ -1,9 +1,5 @@
 from setuptools import find_packages, setup
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
-
 setup(
     name="dsemu",
     version="0.1.0",
@@ -12,7 +8,6 @@ setup(
     author="Filip Wojciechowski",
     author_email="fwojciec@gmail.com",
     description="A wrapper around the datastore emulator instance for use in tests.",
-    long_description=long_description,
     packages=find_packages(exclude=("tests",)),
     install_requires=[],
     classifiers=[
