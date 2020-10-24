@@ -171,14 +171,11 @@ class Emulator:
 
     def _get_binary(self) -> str:
         if self._gcloud is None:
-            self._gcloud = self._find_binary()
+            gcloud = shutil.which("gcloud")
+            if gcloud is None:
+                raise OSError(2, "binary not found", "gcloud")
+            self._gcloud = gcloud
         return self._gcloud
-
-    def _find_binary(self) -> str:
-        gcloud = shutil.which("gcloud")
-        if gcloud is None:
-            raise OSError(2, "binary not found", "gcloud")
-        return gcloud
 
     def _parse_env_init_output(self, output: str) -> Tuple[str, str, str]:
         host = None
