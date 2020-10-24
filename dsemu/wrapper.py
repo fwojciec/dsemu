@@ -66,11 +66,9 @@ class Emulator:
         """
         if self._instance is not None and self._is_healthy():
             self._request(SHUTDOWN_ENDPOINT, method="POST")
-            os.unsetenv("DATASTORE_EMULATOR_HOST")
-            os.unsetenv("DATASTORE_PROJECT_ID")
+            self._unset_env_vars()
             self._instance.terminate()
             self._instance = None
-
         self._host = None
         self._project_id = None
         self._gcloud = None
