@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="dsemu",
-    version="0.1.3",
+    version="0.2.0",
     url="https://github.com/fwojciec/dsemu",
     license="MIT",
     author="Filip Wojciechowski",
