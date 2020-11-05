@@ -1,6 +1,6 @@
 import pytest
+from dsemu import Emulator
 from google.cloud import datastore
-from dsemu.wrapper import Emulator
 
 
 @pytest.fixture(scope="session")
