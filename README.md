@@ -28,8 +28,8 @@ starting a new one and will not tear it down at the end of the test run.
 ```python
 # conftest.py
 import pytest
+from dsemu import Emulator
 from google.cloud import datastore
-from dsemu.wrapper import Emulator
 
 
 @pytest.fixture(scope="session")
