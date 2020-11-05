@@ -3,13 +3,15 @@ import shutil
 import subprocess
 import time
 from types import TracebackType
-from typing import Optional, Tuple, Type, Set
+from typing import Optional, Type, Set
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 RESET_ENDPOINT = "/reset"
 SHUTDOWN_ENDPOINT = "/shutdown"
 HEALTHCHECK_ENDPOINT = ""
+DEFAULT_PROJECT = "test"
+DEFAULT_HOST = "localhost:8088"
 
 
 class EmulatorException(Exception):
@@ -31,12 +33,26 @@ class Emulator:
     variables are present).
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        _default_project: str = DEFAULT_PROJECT,
+        _default_host: str = DEFAULT_HOST,
+        _reset_endpoint: str = RESET_ENDPOINT,
+        _shutdown_endpoint: str = SHUTDOWN_ENDPOINT,
+        _healthcheck_endpoint: str = HEALTHCHECK_ENDPOINT,
+    ) -> None:
         self._host: Optional[str] = None
         self._project_id: Optional[str] = None
         self._gcloud: Optional[str] = None
         self._instance: Optional[subprocess.Popen] = None
         self._env_vars_set: Set[str] = set()
+
+        # configurable defaults
+        self._default_project = _default_project
+        self._default_host = _default_host
+        self._reset_endpoint = _reset_endpoint
+        self._shutdown_endpoint = _shutdown_endpoint
+        self._healthcheck_endpoint = _healthcheck_endpoint
 
     def __enter__(self) -> "Emulator":
         self.start()
@@ -65,7 +81,7 @@ class Emulator:
         be stopped.
         """
         if self._instance is not None and self._is_healthy():
-            self._request(SHUTDOWN_ENDPOINT, method="POST")
+            self._request(self._shutdown_endpoint, method="POST")
             self._unset_env_vars()
             self._instance.terminate()
             self._instance = None
@@ -78,7 +94,7 @@ class Emulator:
         Reset resets the in-memory emulator storage. This works only when
         in-memory option was set when starting the emulator instance.
         """
-        self._request(RESET_ENDPOINT, method="POST")
+        self._request(self._reset_endpoint, method="POST")
 
     def _is_already_running(self) -> bool:
         host = os.getenv("DATASTORE_HOST")
@@ -90,57 +106,46 @@ class Emulator:
             return False
 
         try:
-            self._request(HEALTHCHECK_ENDPOINT, host=host)
+            self._request(self._healthcheck_endpoint, host=host)
         except (EmulatorException, URLError, RuntimeError):
             return False
 
         self._host = host
         self._project_id = project_id
-
         return True
 
     def _start(self) -> None:
         args = [
-            self._get_binary(),
+            self._gcloud_binary,
             "beta",
             "emulators",
             "datastore",
             "start",
             "--consistency=1.0",
             "--no-store-on-disk",
+            f"--host-port={self._default_host}",
+            f"--project={self._default_project}",
         ]
-        self._host, self._project_id = self._init_env()
+        self._host = f"http://{self._default_host}"
+        self._project_id = self._default_project
         self._instance = subprocess.Popen(
             args,
             stderr=subprocess.PIPE,
         )
         self._confirm_startup()
-
-    def _command(self, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            (self._get_binary(), "beta", "emulators", "datastore") + args,
-            stdout=subprocess.PIPE,
-            universal_newlines=True,
-        )
-
-    def _init_env(self) -> Tuple[str, str]:
-        proc = self._command("env-init")
-        host, emulator_host, project_id = self._parse_env_init_output(proc.stdout)
-        self._set_env_var("DATASTORE_EMULATOR_HOST", emulator_host)
-        self._set_env_var("DATASTORE_PROJECT_ID", project_id)
-        return (host, project_id)
+        self._set_env_var("DATASTORE_EMULATOR_HOST", self._default_host)
+        self._set_env_var("DATASTORE_PROJECT_ID", self._default_project)
 
     def _is_healthy(self) -> bool:
         try:
-            self._request(HEALTHCHECK_ENDPOINT)
+            self._request(self._healthcheck_endpoint)
         except URLError:
             return False
         return True
 
     def _request(self, path: str, method: str = "GET", host: Optional[str] = None):
         if host is None:
-            host = self._get_host()
-
+            host = self._current_host
         with urlopen(Request(host + path, method=method)) as resp:
             if resp.status != 200:
                 path = path.replace("/", "") if path != "" else "healthcheck"
@@ -164,34 +169,17 @@ class Emulator:
         while self._env_vars_set:
             os.unsetenv(self._env_vars_set.pop())
 
-    def _get_host(self) -> str:
+    @property
+    def _current_host(self) -> str:
         if self._host is None:
             raise RuntimeError("host value is not set")
         return self._host
 
-    def _get_binary(self) -> str:
+    @property
+    def _gcloud_binary(self) -> str:
         if self._gcloud is None:
             gcloud = shutil.which("gcloud")
             if gcloud is None:
                 raise OSError(2, "binary not found", "gcloud")
             self._gcloud = gcloud
         return self._gcloud
-
-    def _parse_env_init_output(self, output: str) -> Tuple[str, str, str]:
-        host = None
-        emulator_host = None
-        project_id = None
-
-        for line in output.rstrip().split("\n"):
-            key, val = line.split("=")
-            if key.endswith("DATASTORE_HOST"):
-                host = val
-            if key.endswith("DATASTORE_EMULATOR_HOST"):
-                emulator_host = val
-            if key.endswith("DATASTORE_PROJECT_ID"):
-                project_id = val
-
-        if host is None or emulator_host is None or project_id is None:
-            raise EmulatorException("failed to parse env-init output")
-
-        return host, emulator_host, project_id
