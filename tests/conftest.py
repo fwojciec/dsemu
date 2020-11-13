@@ -11,7 +11,7 @@ def emulator():
 
 @pytest.fixture(scope="session")
 def session_client():
-    client = datastore.Client()
+    client = datastore.Client(project="test")
     yield client
 
 
